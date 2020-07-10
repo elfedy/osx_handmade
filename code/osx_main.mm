@@ -4,6 +4,8 @@
 #import <AudioToolbox/AudioToolbox.h>
 #include "osx_main.h"
 #include <math.h>
+#include <mach/mach_init.h>
+#include <mach/mach_time.h>
 
 
 global_variable bool GlobalRunning = true;
@@ -404,6 +406,9 @@ int main(int argc, const char *argv[])
 
     real32 tSine = 0.0f;
 
+    mach_timebase_info_data_t TimeBase;
+    mach_timebase_info(&TimeBase);
+
     uint64 LastCounter = mach_absolute_time();
     while(GlobalRunning)
     {
@@ -593,14 +598,11 @@ int main(int argc, const char *argv[])
         uint64 EndOfFrameTime = mach_absolute_time();
         uint64 TimeUnitsPerFrame = EndOfFrameTime - LastCounter;
 
-        mach_timebase_info_data_t TimeBase;
+        uint64 NanosecondsPerFrame = TimeUnitsPerFrame * (TimeBase.numer / TimeBase.denom);
+        real32 SecondsPerFrame = (real32)NanosecondsPerFrame * 1.0E-9;
+        real32 FramesPerSecond = 1 / SecondsPerFrame;
 
-        if(TimeBase.denom == 0)
-        {
-          // First time, we need to get the timebase
-          mach_timebase_info(&TimeBase);
-        }
-        // TODO...See what Ted does here
+        printf("Frames per second: %f\n", FramesPerSecond);
 
         LastCounter = mach_absolute_time();
     }
