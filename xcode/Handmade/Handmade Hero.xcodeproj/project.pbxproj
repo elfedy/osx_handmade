@@ -1,0 +1,117 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 50;
+	objects = {
+
+/* Begin PBXAggregateTarget section */
+		9E3CADBC2447F587005356F4 /* Handmade Hero */ = {
+			isa = PBXAggregateTarget;
+			buildConfigurationList = 9E3CADBF2447F587005356F4 /* Build configuration list for PBXAggregateTarget "Handmade Hero" */;
+			buildPhases = (
+			);
+			dependencies = (
+			);
+			name = "Handmade Hero";
+			productName = "Handmade Hero";
+		};
+/* End PBXAggregateTarget section */
+
+/* Begin PBXFileReference section */
+		9E3CADBB2447F3B0005356F4 /* osx_main.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; name = osx_main.mm; path = ../../code/osx_main.mm; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		9E3CADB024454E65005356F4 = {
+			isa = PBXGroup;
+			children = (
+				9E3CADBB2447F3B0005356F4 /* osx_main.mm */,
+			);
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXProject section */
+		9E3CADB124454E65005356F4 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				LastUpgradeCheck = 1130;
+				TargetAttributes = {
+					9E3CADBC2447F587005356F4 = {
+						CreatedOnToolsVersion = 11.3.1;
+					};
+				};
+			};
+			buildConfigurationList = 9E3CADB424454E65005356F4 /* Build configuration list for PBXProject "Handmade Hero" */;
+			compatibilityVersion = "Xcode 9.3";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 9E3CADB024454E65005356F4;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				9E3CADBC2447F587005356F4 /* Handmade Hero */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin XCBuildConfiguration section */
+		9E3CADB524454E65005356F4 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+			};
+			name = Debug;
+		};
+		9E3CADB624454E65005356F4 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+			};
+			name = Release;
+		};
+		9E3CADBD2447F587005356F4 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Debug;
+		};
+		9E3CADBE2447F587005356F4 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		9E3CADB424454E65005356F4 /* Build configuration list for PBXProject "Handmade Hero" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9E3CADB524454E65005356F4 /* Debug */,
+				9E3CADB624454E65005356F4 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		9E3CADBF2447F587005356F4 /* Build configuration list for PBXAggregateTarget "Handmade Hero" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9E3CADBD2447F587005356F4 /* Debug */,
+				9E3CADBE2447F587005356F4 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 9E3CADB124454E65005356F4 /* Project object */;
+}
