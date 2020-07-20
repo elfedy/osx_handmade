@@ -1,4 +1,4 @@
-#include "handmade.h"
+#include "../cpp/code/handmade.h"
 
 const uint16 UpArrowKeyCode = 0x7E;
 const uint16 DownArrowKeyCode = 0x7D;
@@ -42,11 +42,3 @@ typedef struct osx_sound_output
   void *Data;
   AudioComponentInstance *AudioUnit;
 } osx_sound_output;
-
-typedef struct osxBitmap {
-  int width;
-  int height;
-  int bytesPerPixel;
-  int pitch;
-  uint8 *buffer;
-} osxBitmap;

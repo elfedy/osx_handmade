@@ -6,61 +6,40 @@
 #include <math.h>
 #include <mach/mach_init.h>
 #include <mach/mach_time.h>
+#include "../cpp/code/handmade.cpp"
 
 
 global_variable bool GlobalRunning = true;
 
-internal void renderWeirdGradient(osxBitmap *bitmap, uint8 offsetX, uint8 offsetY)
+internal void osxRefreshBuffer(game_offscreen_buffer *bitmap, NSWindow *window)
 {
-    uint8_t *row = (uint8_t *)bitmap->buffer;
-
-    for (int y = 0; y < bitmap->height; ++y)
-    {
-        uint8_t *pixelChannel = (uint8_t *)row;
-        for(int x = 0; x < bitmap->width; ++x)
-        {
-            // Red
-            *pixelChannel++ = 0;
-            // Green
-            *pixelChannel++ = (uint8_t)y + offsetY;
-            // Blue
-            *pixelChannel++ = (uint8_t)x + offsetX;
-            // Alpha
-            *pixelChannel++ = 255;
-        }
-        row += bitmap->pitch;
+    if(bitmap->Memory) {
+      free(bitmap->Memory);
     }
+    bitmap->Width = window.contentView.bounds.size.width;
+    bitmap->Height =  window.contentView.bounds.size.height;
+    bitmap->BytesPerPixel = 4;
+    bitmap->Pitch = bitmap->Width * bitmap->BytesPerPixel;
+    int bufferSize = bitmap->Pitch * bitmap->Height;
+    bitmap->Memory = (uint8_t *)malloc(bufferSize);
 }
 
-internal void osxRefreshBuffer(osxBitmap *bitmap, NSWindow *window)
+internal void osxRedrawBuffer(game_offscreen_buffer *bitmap, NSWindow *window)
 {
-    if(bitmap->buffer) {
-      free(bitmap->buffer);
-    }
-    bitmap->width = window.contentView.bounds.size.width;
-    bitmap->height =  window.contentView.bounds.size.height;
-    bitmap->bytesPerPixel = 4;
-    bitmap->pitch = bitmap->width * bitmap->bytesPerPixel;
-    int bufferSize = bitmap->pitch * bitmap->height;
-    bitmap->buffer = (uint8_t *)malloc(bufferSize);
-}
-
-internal void osxRedrawBuffer(osxBitmap *bitmap, NSWindow *window)
-{
-    uint8_t *planes[1] = {bitmap->buffer};
+    uint8_t *planes[1] = {bitmap->Memory};
     @autoreleasepool {
         NSBitmapImageRep *imageRep = [[[NSBitmapImageRep alloc]
                                  initWithBitmapDataPlanes: planes
-                                 pixelsWide: bitmap->width
-                                 pixelsHigh: bitmap->height
+                                 pixelsWide: bitmap->Width
+                                 pixelsHigh: bitmap->Height
                                  bitsPerSample: 8
-                                 samplesPerPixel: bitmap->bytesPerPixel
+                                 samplesPerPixel: bitmap->BytesPerPixel
                                  hasAlpha: true
                                  isPlanar: false
                                  colorSpaceName: NSDeviceRGBColorSpace
-                                 bytesPerRow: bitmap->pitch
-                                 bitsPerPixel: 8 * bitmap->bytesPerPixel] autorelease];
-        NSSize imageSize = NSMakeSize(bitmap->width, bitmap->height);
+                                 bytesPerRow: bitmap->Pitch
+                                 bitsPerPixel: 8 * bitmap->BytesPerPixel] autorelease];
+        NSSize imageSize = NSMakeSize(bitmap->Width, bitmap->Height);
         NSImage *image = [[[NSImage alloc] initWithSize: imageSize] autorelease];
         [image addRepresentation: imageRep];
         window.contentView.layer.contents = image;
@@ -375,7 +354,7 @@ int main(int argc, const char *argv[])
                                                     backing: NSBackingStoreBuffered
                                                        defer: NO];
     
-    osxBitmap bitmap = {};
+    game_offscreen_buffer bitmap = {};
 
     [window setBackgroundColor: NSColor.blackColor];
     [window setTitle: @"Handmade Hero"];
@@ -404,7 +383,15 @@ int main(int argc, const char *argv[])
     osx_sound_output SoundOutput = {};
     OsxSetupAudio(&SoundOutput);
 
-    real32 tSine = 0.0f;
+    game_sound_output_buffer SoundBuffer = {};
+    int16 *Samples = (int16 *)calloc(
+        SoundOutput.SamplesPerSecond,
+        SoundOutput.BytesPerSample
+      );
+    SoundBuffer.SamplesPerSecond = SoundOutput.SamplesPerSecond;
+
+    local_persist uint32 RunningSampleIndex = 0;
+    local_persist uint32 ToneHz = 256;
 
     mach_timebase_info_data_t TimeBase;
     mach_timebase_info(&TimeBase);
@@ -499,15 +486,6 @@ int main(int argc, const char *argv[])
             [NSApp sendEvent: Event];
         } while(Event != nil);
         
-        renderWeirdGradient(&bitmap, offsetX, offsetY);
-        osxRedrawBuffer(&bitmap, window);
-
-        // Write sound to sound output (To be then be copied into Core Audio's buffers
-        // when the callback to do so gets called);
-        local_persist uint32 Frequency = 256;
-        uint32 Period = SoundOutput.SamplesPerSecond / Frequency;
-        local_persist uint32 RunningSampleIndex = 0;
-
         // Let's be a 15th of a second ahead of the play cursor
         int32 LatencySampleCount = SoundOutput.SamplesPerSecond / 15;
         int32 TargetQueueBytes = LatencySampleCount * SoundOutput.BytesPerSample;
@@ -529,6 +507,11 @@ int main(int argc, const char *argv[])
           BytesToWrite = TargetCursor - ByteToLock;
         }
 
+        SoundBuffer.Samples = Samples;
+        SoundBuffer.SampleCount = (BytesToWrite/SoundOutput.BytesPerSample);
+        GameUpdateAndRender(&bitmap, offsetX, offsetY, &SoundBuffer, ToneHz);
+        osxRedrawBuffer(&bitmap, window);
+
         void *Region1 = (uint8 *)SoundOutput.Data + ByteToLock;
         uint32 Region1Size = BytesToWrite;
 
@@ -546,12 +529,8 @@ int main(int argc, const char *argv[])
 
         for(int SampleIndex = 0; SampleIndex < Region1SampleCount; ++SampleIndex)
         {
-          real32 SineValue = sinf(tSine); 
-          int16 SampleValue = (int16)(SineValue * ToneVolume);
-          *SampleOut++ = SampleValue;
-          *SampleOut++ = SampleValue;
-          tSine += 2.0f*M_PI/(real32)Period;
-          tSine = tSine > 2.0f*M_PI ? (tSine - 2.0f*M_PI) : tSine;
+          *SampleOut++ = *SoundBuffer.Samples++;
+          *SampleOut++ = *SoundBuffer.Samples++;
           RunningSampleIndex++;
         }
 
@@ -560,16 +539,11 @@ int main(int argc, const char *argv[])
 
         for(int SampleIndex = 0; SampleIndex < Region2SampleCount; ++SampleIndex)
         {
-          real32 SineValue = sinf(tSine); 
-          int16 SampleValue = (int16)(SineValue * ToneVolume);
-          *SampleOut++ = SampleValue;
-          *SampleOut++ = SampleValue;
-          tSine += 2.0f*M_PI/(real32)Period;
-          tSine = tSine > 2.0f*M_PI ? (tSine - 2.0f*M_PI) : tSine;
+          *SampleOut++ = *SoundBuffer.Samples++;
+          *SampleOut++ = *SoundBuffer.Samples++;
           RunningSampleIndex++;
         }
 
-        Frequency = 256;
         if(osxCurrentController->Button1State == 1)
         {
           offsetX++;
@@ -578,12 +552,12 @@ int main(int argc, const char *argv[])
         if(osxCurrentController->DPadX > 0)
         {
           offsetX++;
-          Frequency += 20;
+          ToneHz += 20;
         }
         if(osxCurrentController->DPadX < 0)
         {
           offsetX--;
-          Frequency -= 20;
+          ToneHz -= 20;
         }
         if(osxCurrentController->DPadY > 0)
         {
