@@ -338,6 +338,14 @@ internal void OsxSetupAudio(osx_sound_output *SoundOutput)
   AudioOutputUnitStart(*SoundOutput->AudioUnit);
 }
 
+internal void OsxProcessGameControllerButton(game_button_state *OldState,
+  game_button_state *NewState,
+  bool32 IsDown)
+{
+  NewState->EndedDown = IsDown;
+  NewState->HalfTransitionCount += ((NewState->EndedDown == OldState->EndedDown) ? 0 : 1);
+}
+
 int main(int argc, const char *argv[])
 {
     double RenderWidth = 1024;
@@ -378,7 +386,11 @@ int main(int argc, const char *argv[])
     osxSetupGameController(&osxGameController);
 
     osx_game_controller osxKeyboardController = {};
-    osx_game_controller *osxCurrentController = &osxKeyboardController;
+
+    osx_game_controller *OsxControllers[2] = { &osxKeyboardController, &osxGameController };
+    game_input Input[2] = {};
+    game_input *NewInput = &Input[0];
+    game_input *OldInput = &Input[1];
 
     osx_sound_output SoundOutput = {};
     OsxSetupAudio(&SoundOutput);
@@ -390,8 +402,11 @@ int main(int argc, const char *argv[])
       );
     SoundBuffer.SamplesPerSecond = SoundOutput.SamplesPerSecond;
 
+    // Let's be a 15th of a second ahead of the play cursor
+    int32 LatencySampleCount = SoundOutput.SamplesPerSecond / 15;
+    int32 TargetQueueBytes = LatencySampleCount * SoundOutput.BytesPerSample;
+    
     local_persist uint32 RunningSampleIndex = 0;
-    local_persist uint32 ToneHz = 256;
 
     mach_timebase_info_data_t TimeBase;
     mach_timebase_info(&TimeBase);
@@ -485,11 +500,77 @@ int main(int argc, const char *argv[])
             }
             [NSApp sendEvent: Event];
         } while(Event != nil);
-        
-        // Let's be a 15th of a second ahead of the play cursor
-        int32 LatencySampleCount = SoundOutput.SamplesPerSecond / 15;
-        int32 TargetQueueBytes = LatencySampleCount * SoundOutput.BytesPerSample;
 
+        game_input *Temp = NewInput;
+        NewInput = OldInput;
+        OldInput = Temp;
+
+        for (int osxControllerIndex = 0; osxControllerIndex < 2; osxControllerIndex++)
+        {
+          osx_game_controller *OsxController = OsxControllers[osxControllerIndex];
+
+          game_controller_input *OldController = &OldInput->Controllers[osxControllerIndex];
+          game_controller_input *NewController = &NewInput->Controllers[osxControllerIndex];
+
+          OsxProcessGameControllerButton(
+            &(OldController->ActionLeft),
+            &(NewController->ActionLeft),
+            OsxController->Button1State
+          );
+          OsxProcessGameControllerButton(
+            &(OldController->ActionUp),
+            &(NewController->ActionUp),
+            OsxController->Button2State
+          );
+          OsxProcessGameControllerButton(
+            &(OldController->ActionRight),
+            &(NewController->ActionRight),
+            OsxController->Button3State
+          );
+          OsxProcessGameControllerButton(
+            &(OldController->ActionDown),
+            &(NewController->ActionDown),
+            OsxController->Button4State
+          );
+          OsxProcessGameControllerButton(
+            &(OldController->LeftShoulder),
+            &(NewController->LeftShoulder),
+            OsxController->Button5State
+          );
+          OsxProcessGameControllerButton(
+            &(OldController->RightShoulder),
+            &(NewController->RightShoulder),
+            OsxController->Button6State
+          );
+
+          bool32 Right = OsxController->DPadX > 0;
+          bool32 Left = OsxController->DPadX < 0;
+          bool32 Down = OsxController->DPadY > 0;
+          bool32 Up = OsxController->DPadY < 0;
+
+          OsxProcessGameControllerButton(
+            &(OldController->MoveRight),
+            &(NewController->MoveRight),
+            Right
+          );
+          OsxProcessGameControllerButton(
+            &(OldController->MoveLeft),
+            &(NewController->MoveLeft),
+            Left
+          );
+          OsxProcessGameControllerButton(
+            &(OldController->MoveUp),
+            &(NewController->MoveUp),
+            Up
+          );
+          OsxProcessGameControllerButton(
+            &(OldController->MoveDown),
+            &(NewController->MoveDown),
+            Down
+          );
+        }
+
+        
         uint32 TargetCursor = ((SoundOutput.PlayCursor + TargetQueueBytes) % SoundOutput.BufferSize);
 
         int32 ByteToLock = (RunningSampleIndex * SoundOutput.BytesPerSample) % SoundOutput.BufferSize;
@@ -509,7 +590,7 @@ int main(int argc, const char *argv[])
 
         SoundBuffer.Samples = Samples;
         SoundBuffer.SampleCount = (BytesToWrite/SoundOutput.BytesPerSample);
-        GameUpdateAndRender(&bitmap, offsetX, offsetY, &SoundBuffer, ToneHz);
+        GameUpdateAndRender(NewInput, &bitmap, &SoundBuffer);
         osxRedrawBuffer(&bitmap, window);
 
         void *Region1 = (uint8 *)SoundOutput.Data + ByteToLock;
@@ -542,30 +623,6 @@ int main(int argc, const char *argv[])
           *SampleOut++ = *SoundBuffer.Samples++;
           *SampleOut++ = *SoundBuffer.Samples++;
           RunningSampleIndex++;
-        }
-
-        if(osxCurrentController->Button1State == 1)
-        {
-          offsetX++;
-        }
-
-        if(osxCurrentController->DPadX > 0)
-        {
-          offsetX++;
-          ToneHz += 20;
-        }
-        if(osxCurrentController->DPadX < 0)
-        {
-          offsetX--;
-          ToneHz -= 20;
-        }
-        if(osxCurrentController->DPadY > 0)
-        {
-          offsetY--;
-        }
-        if(osxCurrentController->DPadY < 0)
-        {
-          offsetY++;
         }
       
         // End of Frame
