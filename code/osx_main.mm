@@ -373,15 +373,39 @@ int main(int argc, const char *argv[])
     window.contentView.wantsLayer = true;
 
     osxRefreshBuffer(&bitmap, window);
+
+    game_memory GameMemory = {};
+
+    GameMemory.PermanentStorageSize = Megabytes(64);
+    GameMemory.TransientStorageSize = Gigabytes(2);
+
+#if HANDMADE_INTERNAL
+  char *BaseAddress = (char *)Gigabytes(5);
+  uint32 AllocationFlags = MAP_PRIVATE | MAP_ANON | MAP_FIXED;
+#else
+  void *BaseAddress = 0;
+  uint32 AllocationFlags = MAP_PRIVATE | MAP_ANON;
+#endif
+
+    uint32 AccessFlags = PROT_READ | PROT_WRITE;
+
+    GameMemory.PermanentStorage = mmap(BaseAddress, GameMemory.PermanentStorageSize, AccessFlags, AllocationFlags, -1, 0);
+
+    if(GameMemory.PermanentStorage == MAP_FAILED) {
+      printf("mmap error: %d %s\n", errno, strerror(errno));
+      [NSException raise: @"Game Memory Permanent Storage Not Allocated"
+                   format: @"Failed to allocate permanent storage"];
+    }
+
+    uint8 *TransientStorageAddress = ((uint8 *)GameMemory.PermanentStorage + GameMemory.PermanentStorageSize);
+    GameMemory.TransientStorage = mmap(TransientStorageAddress, GameMemory.TransientStorageSize, AccessFlags, AllocationFlags, -1, 0);
+
+    if(GameMemory.PermanentStorage == MAP_FAILED) {
+      printf("mmap error: %d %s\n", errno, strerror(errno));
+      [NSException raise: @"Game Memory Transient Storage Not Allocated"
+                   format: @"Failed to allocate transient storage"];
+    }
     
-    uint8_t red = 255;
-    uint8_t blue = 0;
-    uint8_t green = 0;
-    uint8_t alpha = 255;
-
-    uint8 offsetX = 0;
-    uint8 offsetY = 0;
-
     osx_game_controller osxGameController = {};
     osxSetupGameController(&osxGameController);
 
@@ -590,7 +614,7 @@ int main(int argc, const char *argv[])
 
         SoundBuffer.Samples = Samples;
         SoundBuffer.SampleCount = (BytesToWrite/SoundOutput.BytesPerSample);
-        GameUpdateAndRender(NewInput, &bitmap, &SoundBuffer);
+        GameUpdateAndRender(&GameMemory, NewInput, &bitmap, &SoundBuffer);
         osxRedrawBuffer(&bitmap, window);
 
         void *Region1 = (uint8 *)SoundOutput.Data + ByteToLock;
