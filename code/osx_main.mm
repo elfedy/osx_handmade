@@ -6,10 +6,169 @@
 #include <math.h>
 #include <mach/mach_init.h>
 #include <mach/mach_time.h>
+#include <mach-o/dyld.h>
 #include "../cpp/code/handmade.cpp"
 
+#define OSX_MAX_FILENAME_SIZE 4096
 
 global_variable bool GlobalRunning = true;
+
+struct osx_app_path
+{
+  char Filename[OSX_MAX_FILENAME_SIZE];
+  char *OnePastLastAppFileNameSlash;
+};
+
+//TODO Destination bounds checking
+internal void
+CatStrings(size_t SourceACount, char *SourceA, size_t SourceBCount, char *SourceB, size_t DestCount, char *Dest)
+{
+  for(int Index = 0; Index < SourceACount; ++Index)
+  {
+    *Dest++ = *SourceA++;
+  }
+
+  for(int Index = 0; Index < SourceBCount; ++Index)
+  {
+    *Dest++ = *SourceB++;
+  }
+
+  *Dest++ = 0;
+}
+
+internal int
+StringLength(char *String)
+{
+  int Count = 0;
+
+  while(*String++)
+  {
+    ++Count;
+  }
+
+  return Count;
+}
+
+#if HANDMADE_INTERNAL
+internal void
+OsxBuildAppFilePath(osx_app_path *Path)
+{
+  uint32 BufferSize = sizeof(Path->Filename);
+  if(_NSGetExecutablePath(Path->Filename, &BufferSize) == 0)
+  {
+    for (char *Scan = Path->Filename; *Scan; Scan++)
+    {
+      if (*Scan == '/') {
+        Path->OnePastLastAppFileNameSlash = Scan + 1;
+      }
+    }
+  }
+}
+
+internal void
+OsxBuildAppPathFilename(osx_app_path *Path, char *Filename, int DestCount, char *Dest)
+{
+  size_t PathFileNameSize = (Path->OnePastLastAppFileNameSlash - Path->Filename);
+  CatStrings(PathFileNameSize, Path->Filename, StringLength(Filename), Filename, DestCount, Dest);
+}
+
+
+debug_read_file_result DEBUGPlatformReadEntireFile(char *Filename)
+{
+  debug_read_file_result Result = {};
+
+  osx_app_path Path = {};
+  OsxBuildAppFilePath(&Path);
+
+  // This is the file location in the bundle
+  char BundleFilename[OSX_MAX_FILENAME_SIZE];
+  char LocalFilename[OSX_MAX_FILENAME_SIZE];
+  sprintf(LocalFilename, "Contents/Resources/%s", Filename);
+
+  // Contents/Resources/test_background.bmp
+  OsxBuildAppPathFilename(&Path, LocalFilename, sizeof(BundleFilename), BundleFilename);
+
+  FILE *FileHandle = fopen(BundleFilename, "r+");
+
+  if(FileHandle != NULL)
+  {
+    fseek(FileHandle, 0, SEEK_END);
+    uint64 FileSize = ftell(FileHandle);
+
+    if(FileSize)
+    {
+      rewind(FileHandle);
+      Result.Contents = malloc(FileSize);
+
+      if(Result.Contents)
+      {
+        uint64 BytesRead = fread(Result.Contents, 1, FileSize, FileHandle);
+        if(BytesRead)
+        {
+          Result.ContentsSize = FileSize;
+        } else
+        {
+          DEBUGPlatformFreeFileMemory(Result.Contents);
+          Result.ContentsSize = 0;
+        }
+      } else
+      {
+        // TODO: diagnostics
+      }
+    } else
+    {
+        // TODO: diagnostics
+    }
+  } else
+  {
+    // TODO: diagnostics
+  }
+
+  return Result;
+}
+
+bool32 DEBUGPlatformWriteEntireFile(char *Filename, uint64 FileSize, void *Memory)
+{
+  bool32 Result = false;
+
+  osx_app_path Path = {};
+  OsxBuildAppFilePath(&Path);
+
+  char BundleFilename[OSX_MAX_FILENAME_SIZE];
+  char LocalFilename[OSX_MAX_FILENAME_SIZE];
+
+  sprintf(LocalFilename, "Contents/%s", Filename);
+
+  OsxBuildAppPathFilename(&Path, LocalFilename, sizeof(BundleFilename), BundleFilename);
+
+  FILE *FileHandle = fopen(BundleFilename, "w");
+
+  if(FileHandle)
+  {
+    uint64 BytesWritten = fwrite(Memory, 1, FileSize, FileHandle);
+    if(BytesWritten == 1)
+    {
+      Result = true;
+    } else
+    {
+      // TODO: diagnostics
+    }
+  } else {
+    // TODO: diagnostics
+  }
+
+  return Result;
+}
+#endif
+
+void
+DEBUGPlatformFreeFileMemory(void *Memory)
+{
+  if(Memory)
+  {
+    free(Memory);
+  }
+}
 
 internal void osxRefreshBuffer(game_offscreen_buffer *bitmap, NSWindow *window)
 {
