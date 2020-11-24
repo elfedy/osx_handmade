@@ -505,6 +505,14 @@ internal void OsxProcessGameControllerButton(game_button_state *OldState,
   NewState->HalfTransitionCount += ((NewState->EndedDown == OldState->EndedDown) ? 0 : 1);
 }
 
+internal real32
+OsxGetSecondsElapsed(mach_timebase_info_data_t *TimeBase, uint64 Start, uint64 End)
+{
+  uint64 Elapsed = End - Start;
+  real32 Result = (real32)(Elapsed * (TimeBase->numer / TimeBase->denom)) / 1000.0f / 1000.0f / 1000.0f;
+  return(Result);
+}
+
 int main(int argc, const char *argv[])
 {
     double RenderWidth = 1024;
@@ -590,6 +598,10 @@ int main(int argc, const char *argv[])
     int32 TargetQueueBytes = LatencySampleCount * SoundOutput.BytesPerSample;
     
     local_persist uint32 RunningSampleIndex = 0;
+
+    int32 MonitorRefreshHz = 60;
+    real32 TargetFramesPerSecond = MonitorRefreshHz / 2.0f;
+    real32 TargetSecondsPerFrame = 1.0f / TargetFramesPerSecond;
 
     mach_timebase_info_data_t TimeBase;
     mach_timebase_info(&TimeBase);
@@ -774,7 +786,6 @@ int main(int argc, const char *argv[])
         SoundBuffer.Samples = Samples;
         SoundBuffer.SampleCount = (BytesToWrite/SoundOutput.BytesPerSample);
         GameUpdateAndRender(&GameMemory, NewInput, &bitmap, &SoundBuffer);
-        osxRedrawBuffer(&bitmap, window);
 
         void *Region1 = (uint8 *)SoundOutput.Data + ByteToLock;
         uint32 Region1Size = BytesToWrite;
@@ -807,8 +818,36 @@ int main(int argc, const char *argv[])
           *SampleOut++ = *SoundBuffer.Samples++;
           RunningSampleIndex++;
         }
+
+        uint64 WorkCounter = mach_absolute_time();
+
+        real32 WorkSeconds = OsxGetSecondsElapsed(&TimeBase, LastCounter, WorkCounter);
+
+        real32 SecondsElapsedForFrame = WorkSeconds;
+
+        if(SecondsElapsedForFrame < TargetSecondsPerFrame)
+        {
+          // We need to sleep up to target framerate
+
+          real32 UnderOffset = 3.0f / 1000.0f;
+          real32 SleepTime = TargetSecondsPerFrame - SecondsElapsedForFrame - UnderOffset;
+          useconds_t SleepMS = (useconds_t)(1000.0f * 1000.0f * SleepTime);
+
+          if(SleepMS > 0)
+          {
+            usleep(SleepMS);
+          }
+
+          while (SecondsElapsedForFrame < TargetSecondsPerFrame)
+          {
+            SecondsElapsedForFrame = OsxGetSecondsElapsed(&TimeBase, LastCounter, mach_absolute_time());
+          }
+        } else
+        {
+          // TODO: log missed frame rate
+        }
       
-        // End of Frame
+        // End of Updates
         uint64 EndOfFrameTime = mach_absolute_time();
         uint64 TimeUnitsPerFrame = EndOfFrameTime - LastCounter;
 
@@ -819,6 +858,7 @@ int main(int argc, const char *argv[])
         printf("Frames per second: %f\n", FramesPerSecond);
 
         LastCounter = mach_absolute_time();
+        osxRedrawBuffer(&bitmap, window);
     }
 
     printf("Handmade finished running\n");
