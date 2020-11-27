@@ -20,20 +20,20 @@ typedef struct osx_game_controller
   uint32 Button5UsageId;
   uint32 Button6UsageId;
 
-  uint32 Button1State;
-  uint32 Button2State;
-  uint32 Button3State;
-  uint32 Button4State;
-  uint32 Button5State;
-  uint32 Button6State;
+  bool32 Button1State;
+  bool32 Button2State;
+  bool32 Button3State;
+  bool32 Button4State;
+  bool32 Button5State;
+  bool32 Button6State;
   int32 DPadX;
   int32 DPadY;
 } osx_game_controller;
 
 typedef struct osx_sound_output
 {
-  int32 SamplesPerSecond;
-  int32 BytesPerSample;
+  uint32 SamplesPerSecond;
+  uint32 BytesPerSample;
   uint32 BufferSize;
   uint32 WriteCursor;
   // NOTE: This isn't the real sound card play cursor.

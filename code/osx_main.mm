@@ -23,12 +23,12 @@ struct osx_app_path
 internal void
 CatStrings(size_t SourceACount, char *SourceA, size_t SourceBCount, char *SourceB, size_t DestCount, char *Dest)
 {
-  for(int Index = 0; Index < SourceACount; ++Index)
+  for(size_t Index = 0; Index < SourceACount; ++Index)
   {
     *Dest++ = *SourceA++;
   }
 
-  for(int Index = 0; Index < SourceBCount; ++Index)
+  for(size_t Index = 0; Index < SourceBCount; ++Index)
   {
     *Dest++ = *SourceB++;
   }
@@ -66,10 +66,10 @@ OsxBuildAppFilePath(osx_app_path *Path)
 }
 
 internal void
-OsxBuildAppPathFilename(osx_app_path *Path, char *Filename, int DestCount, char *Dest)
+OsxBuildAppPathFilename(osx_app_path *Path, char *Filename, uint32 DestCount, char *Dest)
 {
-  size_t PathFileNameSize = (Path->OnePastLastAppFileNameSlash - Path->Filename);
-  CatStrings(PathFileNameSize, Path->Filename, StringLength(Filename), Filename, DestCount, Dest);
+  size_t PathFileNameSize = (size_t)(Path->OnePastLastAppFileNameSlash - Path->Filename);
+  CatStrings(PathFileNameSize, Path->Filename, (size_t)StringLength(Filename), Filename, DestCount, Dest);
 }
 
 
@@ -93,7 +93,7 @@ debug_read_file_result DEBUGPlatformReadEntireFile(char *Filename)
   if(FileHandle != NULL)
   {
     fseek(FileHandle, 0, SEEK_END);
-    uint64 FileSize = ftell(FileHandle);
+    uint64 FileSize = (uint64)ftell(FileHandle);
 
     if(FileSize)
     {
@@ -105,7 +105,7 @@ debug_read_file_result DEBUGPlatformReadEntireFile(char *Filename)
         uint64 BytesRead = fread(Result.Contents, 1, FileSize, FileHandle);
         if(BytesRead)
         {
-          Result.ContentsSize = FileSize;
+          Result.ContentsSize = (uint32)FileSize;
         } else
         {
           DEBUGPlatformFreeFileMemory(Result.Contents);
@@ -175,12 +175,12 @@ internal void osxRefreshBuffer(game_offscreen_buffer *bitmap, NSWindow *window)
     if(bitmap->Memory) {
       free(bitmap->Memory);
     }
-    bitmap->Width = window.contentView.bounds.size.width;
-    bitmap->Height =  window.contentView.bounds.size.height;
+    bitmap->Width = (int)window.contentView.bounds.size.width;
+    bitmap->Height =  (int)window.contentView.bounds.size.height;
     bitmap->BytesPerPixel = 4;
     bitmap->Pitch = bitmap->Width * bitmap->BytesPerPixel;
     int bufferSize = bitmap->Pitch * bitmap->Height;
-    bitmap->Memory = (uint8_t *)malloc(bufferSize);
+    bitmap->Memory = (uint8_t *)malloc((size_t)bufferSize);
 }
 
 internal void osxRedrawBuffer(game_offscreen_buffer *bitmap, NSWindow *window)
@@ -243,7 +243,7 @@ internal void ControllerInput(void *context, IOReturn result, void *sender, IOHI
   // Buttons
   if(UsagePage == kHIDPage_Button) 
   {
-      int buttonState = IOHIDValueGetIntegerValue(value); 
+      bool32 buttonState = (bool32)IOHIDValueGetIntegerValue(value); 
 
       if(Usage == osxGameController->Button1UsageId)
       {
@@ -272,7 +272,7 @@ internal void ControllerInput(void *context, IOReturn result, void *sender, IOHI
   }
   else if(UsagePage == kHIDPage_GenericDesktop)
   {
-    int elementValue = IOHIDValueGetIntegerValue(value);
+    int64 elementValue = IOHIDValueGetIntegerValue(value);
     float normalizedValue = 0.0;
     long min = IOHIDElementGetLogicalMin(Element);
     long max = IOHIDElementGetLogicalMax(Element);
@@ -285,7 +285,7 @@ internal void ControllerInput(void *context, IOReturn result, void *sender, IOHI
     float scaledMin = -25.0;
     float scaledMax = 25.0;
 
-    int scaledValue = scaledMin + normalizedValue * (scaledMax - scaledMin);
+    int scaledValue = (int)(scaledMin + normalizedValue * (scaledMax - scaledMin));
     
     if(Usage == kHIDUsage_GD_Y)
     {
@@ -417,8 +417,8 @@ internal void OsxSetupAudio(osx_sound_output *SoundOutput)
   // 48 kHz sound
   SoundOutput->SamplesPerSecond = 48000;
   // two 2 byte channels (stereo)
-  int32 AudioFrameSize = sizeof(int16) * 2;
-  int32 NumberOfSeconds = 2;
+  uint32 AudioFrameSize = sizeof(int16) * 2;
+  uint32 NumberOfSeconds = 2;
   SoundOutput->BytesPerSample = AudioFrameSize;
 
   //Allocate a two second sound buffer
@@ -548,13 +548,13 @@ int main(int argc, const char *argv[])
 
 #if HANDMADE_INTERNAL
   char *BaseAddress = (char *)Gigabytes(5);
-  uint32 AllocationFlags = MAP_PRIVATE | MAP_ANON | MAP_FIXED;
+  int32 AllocationFlags = MAP_PRIVATE | MAP_ANON | MAP_FIXED;
 #else
   void *BaseAddress = 0;
-  uint32 AllocationFlags = MAP_PRIVATE | MAP_ANON;
+  int32 AllocationFlags = MAP_PRIVATE | MAP_ANON;
 #endif
 
-    uint32 AccessFlags = PROT_READ | PROT_WRITE;
+    int32 AccessFlags = PROT_READ | PROT_WRITE;
 
     GameMemory.PermanentStorage = mmap(BaseAddress, GameMemory.PermanentStorageSize, AccessFlags, AllocationFlags, -1, 0);
 
@@ -591,15 +591,15 @@ int main(int argc, const char *argv[])
         SoundOutput.SamplesPerSecond,
         SoundOutput.BytesPerSample
       );
-    SoundBuffer.SamplesPerSecond = SoundOutput.SamplesPerSecond;
+    SoundBuffer.SamplesPerSecond = (int)SoundOutput.SamplesPerSecond;
 
     // Let's be a 15th of a second ahead of the play cursor
-    int32 LatencySampleCount = SoundOutput.SamplesPerSecond / 15;
-    int32 TargetQueueBytes = LatencySampleCount * SoundOutput.BytesPerSample;
+    uint32 LatencySampleCount = SoundOutput.SamplesPerSecond / 15;
+    uint32 TargetQueueBytes = LatencySampleCount * SoundOutput.BytesPerSample;
     
     local_persist uint32 RunningSampleIndex = 0;
 
-    int32 MonitorRefreshHz = 60;
+    uint32 MonitorRefreshHz = 60;
     real32 TargetFramesPerSecond = MonitorRefreshHz / 2.0f;
     real32 TargetSecondsPerFrame = 1.0f / TargetFramesPerSecond;
 
@@ -768,8 +768,8 @@ int main(int argc, const char *argv[])
         
         uint32 TargetCursor = ((SoundOutput.PlayCursor + TargetQueueBytes) % SoundOutput.BufferSize);
 
-        int32 ByteToLock = (RunningSampleIndex * SoundOutput.BytesPerSample) % SoundOutput.BufferSize;
-        int32 BytesToWrite;
+        uint32 ByteToLock = (RunningSampleIndex * SoundOutput.BytesPerSample) % SoundOutput.BufferSize;
+        uint32 BytesToWrite;
 
         if(ByteToLock > TargetCursor) {
           // Play cursor wrapped
@@ -784,7 +784,7 @@ int main(int argc, const char *argv[])
         }
 
         SoundBuffer.Samples = Samples;
-        SoundBuffer.SampleCount = (BytesToWrite/SoundOutput.BytesPerSample);
+        SoundBuffer.SampleCount = (int)(BytesToWrite/SoundOutput.BytesPerSample);
         GameUpdateAndRender(&GameMemory, NewInput, &bitmap, &SoundBuffer);
 
         void *Region1 = (uint8 *)SoundOutput.Data + ByteToLock;
@@ -802,7 +802,7 @@ int main(int argc, const char *argv[])
 
         real32 ToneVolume = 5000;
 
-        for(int SampleIndex = 0; SampleIndex < Region1SampleCount; ++SampleIndex)
+        for(uint32 SampleIndex = 0; SampleIndex < Region1SampleCount; ++SampleIndex)
         {
           *SampleOut++ = *SoundBuffer.Samples++;
           *SampleOut++ = *SoundBuffer.Samples++;
@@ -812,7 +812,7 @@ int main(int argc, const char *argv[])
         uint32 Region2SampleCount = Region2Size / SoundOutput.BytesPerSample;
         SampleOut = (int16*)Region2;
 
-        for(int SampleIndex = 0; SampleIndex < Region2SampleCount; ++SampleIndex)
+        for(uint32 SampleIndex = 0; SampleIndex < Region2SampleCount; ++SampleIndex)
         {
           *SampleOut++ = *SoundBuffer.Samples++;
           *SampleOut++ = *SoundBuffer.Samples++;
@@ -852,10 +852,10 @@ int main(int argc, const char *argv[])
         uint64 TimeUnitsPerFrame = EndOfFrameTime - LastCounter;
 
         uint64 NanosecondsPerFrame = TimeUnitsPerFrame * (TimeBase.numer / TimeBase.denom);
-        real32 SecondsPerFrame = (real32)NanosecondsPerFrame * 1.0E-9;
+        real32 SecondsPerFrame = (real32)NanosecondsPerFrame * (real32)1.0E-9;
         real32 FramesPerSecond = 1 / SecondsPerFrame;
 
-        printf("Frames per second: %f\n", FramesPerSecond);
+        printf("Frames per second: %f\n", (real64)FramesPerSecond);
 
         LastCounter = mach_absolute_time();
         osxRedrawBuffer(&bitmap, window);
