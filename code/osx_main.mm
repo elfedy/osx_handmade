@@ -439,12 +439,46 @@ internal void OsxSetupAudio(osx_sound_output *SoundOutput)
 
   // Ask OSX to get an Audio Component that matches our component description
   AudioComponent OutputComponent = AudioComponentFindNext(NULL, &Acd);
-  OSStatus status = AudioComponentInstanceNew(OutputComponent, SoundOutput->AudioUnit);
+  OSStatus Status = AudioComponentInstanceNew(OutputComponent, SoundOutput->AudioUnit);
 
-  if(status != noErr) {
+  if(Status != noErr) {
     printf("There was an error setting up sound.\n");
     return;
   }
+
+  // Set a frame size
+/*
+  uint32 TargetSoundFrameSize = 1024;
+  
+  Status = AudioUnitSetProperty(*SoundOutput->AudioUnit,
+    kAudioDevicePropertyBufferFrameSize,
+    kAudioUnitScope_Global,
+    0,
+    &TargetSoundFrameSize,
+    sizeof(uint32));
+
+  if(Status != noErr) {
+    printf("There was an error setting the current sound frame size.\n");
+    return;
+  }
+*/
+
+  // Get current frame size
+  uint32 DataSize = sizeof(uint32);
+  uint32 CurrentBufferFrameSize = 0;
+  Status = AudioUnitGetProperty(*SoundOutput->AudioUnit,
+    kAudioDevicePropertyBufferFrameSize,
+    kAudioUnitScope_Global,
+    0,
+    &CurrentBufferFrameSize,
+    &DataSize);
+
+  if(Status != noErr) {
+    printf("There was an error getting the current buffer frame size.\n");
+    return;
+  }
+
+  printf("Current sound buffer frame size is %d\n", CurrentBufferFrameSize);
 
   // Describe the format of our audio
   AudioStreamBasicDescription AudioDescriptor;
@@ -460,7 +494,7 @@ internal void OsxSetupAudio(osx_sound_output *SoundOutput)
   AudioDescriptor.mBytesPerPacket = SoundOutput->BytesPerSample;
 
   // Set the format to  our audio unit
-  status = AudioUnitSetProperty(
+  Status = AudioUnitSetProperty(
     *SoundOutput->AudioUnit, 
     kAudioUnitProperty_StreamFormat,
     kAudioUnitScope_Input,
@@ -469,7 +503,7 @@ internal void OsxSetupAudio(osx_sound_output *SoundOutput)
     sizeof(AudioDescriptor)
   );
 
-  if(status != noErr) {
+  if(Status != noErr) {
     printf("There was an error setting up sound.\n");
     return;
   }
@@ -479,7 +513,7 @@ internal void OsxSetupAudio(osx_sound_output *SoundOutput)
   RenderCallback.inputProcRefCon = (void *)SoundOutput;
   RenderCallback.inputProc = OsxCoreAudioRenderCallback;
 
-  status = AudioUnitSetProperty(
+  Status = AudioUnitSetProperty(
     *SoundOutput->AudioUnit, 
     kAudioUnitProperty_SetRenderCallback,
     kAudioUnitScope_Global,
@@ -488,7 +522,7 @@ internal void OsxSetupAudio(osx_sound_output *SoundOutput)
     sizeof(RenderCallback)
   );
 
-  if(status != noErr) {
+  if(Status != noErr) {
     printf("There was an error setting up sound.\n");
     return;
   }
