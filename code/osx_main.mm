@@ -2,12 +2,12 @@
 #include <AppKit/AppKit.h>
 #import <IOKit/hid/IOHIDLib.h>
 #import <AudioToolbox/AudioToolbox.h>
-#include "osx_main.h"
+#include <dlfcn.h>
 #include <math.h>
 #include <mach/mach_init.h>
 #include <mach/mach_time.h>
 #include <mach-o/dyld.h>
-#include "../cpp/code/handmade.cpp"
+#include "osx_main.h"
 
 #define OSX_MAX_FILENAME_SIZE 4096
 
@@ -49,7 +49,6 @@ StringLength(char *String)
   return Count;
 }
 
-#if HANDMADE_INTERNAL
 internal void
 OsxBuildAppFilePath(osx_app_path *Path)
 {
@@ -72,8 +71,17 @@ OsxBuildAppPathFilename(osx_app_path *Path, char *Filename, uint32 DestCount, ch
   CatStrings(PathFileNameSize, Path->Filename, (size_t)StringLength(Filename), Filename, DestCount, Dest);
 }
 
+#if HANDMADE_INTERNAL
+DEBUG_PLATFORM_FREE_FILE_MEMORY(DEBUGPlatformFreeFileMemory)
+{
+  if(Memory)
+  {
+    free(Memory);
+  }
+}
 
-debug_read_file_result DEBUGPlatformReadEntireFile(char *Filename)
+
+DEBUG_PLATFORM_READ_ENTIRE_FILE(DEBUGPlatformReadEntireFile)
 {
   debug_read_file_result Result = {};
 
@@ -127,7 +135,7 @@ debug_read_file_result DEBUGPlatformReadEntireFile(char *Filename)
   return Result;
 }
 
-bool32 DEBUGPlatformWriteEntireFile(char *Filename, uint64 FileSize, void *Memory)
+DEBUG_PLATFORM_WRITE_ENTIRE_FILE(DEBUGPlatformWriteEntireFile)
 {
   bool32 Result = false;
 
@@ -161,14 +169,6 @@ bool32 DEBUGPlatformWriteEntireFile(char *Filename, uint64 FileSize, void *Memor
 }
 #endif
 
-void
-DEBUGPlatformFreeFileMemory(void *Memory)
-{
-  if(Memory)
-  {
-    free(Memory);
-  }
-}
 
 internal void osxRefreshBuffer(game_offscreen_buffer *bitmap, NSWindow *window)
 {
@@ -547,6 +547,24 @@ OsxGetSecondsElapsed(mach_timebase_info_data_t *TimeBase, uint64 Start, uint64 E
   return(Result);
 }
 
+internal
+void OsxLoadGameCode(osx_game_code *Game, char *GameLibraryFullPath)
+{
+  Game->GameCodeDLL = dlopen(GameLibraryFullPath, RTLD_NOW);
+  if(Game->GameCodeDLL) {
+    Game->UpdateAndRender = (game_update_and_render *)dlsym(Game->GameCodeDLL, "GameUpdateAndRender");
+    Game->GetSoundSamples = (game_get_sound_samples *)dlsym(Game->GameCodeDLL, "GameGetSoundSamples");
+    Game->IsValid = (Game->UpdateAndRender && Game->GetSoundSamples);
+  }
+
+  if(!Game->IsValid)
+  {
+    printf("Dynamic Library Load Error: %s", dlerror());
+    Game->UpdateAndRender = 0;
+    Game->GetSoundSamples = 0;
+  }
+}
+
 int main(int argc, const char *argv[])
 {
     double RenderWidth = 1024;
@@ -576,6 +594,9 @@ int main(int argc, const char *argv[])
     osxRefreshBuffer(&bitmap, window);
 
     game_memory GameMemory = {};
+    GameMemory.DEBUGPlatformReadEntireFile = DEBUGPlatformReadEntireFile;
+    GameMemory.DEBUGPlatformFreeFileMemory = DEBUGPlatformFreeFileMemory;
+    GameMemory.DEBUGPlatformWriteEntireFile = DEBUGPlatformWriteEntireFile;
 
     GameMemory.PermanentStorageSize = Megabytes(64);
     GameMemory.TransientStorageSize = Gigabytes(2);
@@ -636,6 +657,17 @@ int main(int argc, const char *argv[])
     uint32 MonitorRefreshHz = 60;
     real32 TargetFramesPerSecond = MonitorRefreshHz / 2.0f;
     real32 TargetSecondsPerFrame = 1.0f / TargetFramesPerSecond;
+
+    osx_app_path Path = {};
+    OsxBuildAppFilePath(&Path); 
+
+    char *GameLibraryInBundlePath = (char *)"Contents/Resources/GameCode.dylib";
+    char GameLibraryFullPath[OSX_MAX_FILENAME_SIZE];
+
+    OsxBuildAppPathFilename(&Path, GameLibraryInBundlePath, sizeof(GameLibraryFullPath), GameLibraryFullPath);
+
+    osx_game_code Game = {};
+    OsxLoadGameCode(&Game, GameLibraryFullPath);
 
     mach_timebase_info_data_t TimeBase;
     mach_timebase_info(&TimeBase);
@@ -819,7 +851,8 @@ int main(int argc, const char *argv[])
 
         SoundBuffer.Samples = Samples;
         SoundBuffer.SampleCount = (int)(BytesToWrite/SoundOutput.BytesPerSample);
-        GameUpdateAndRender(&GameMemory, NewInput, &bitmap, &SoundBuffer);
+        Game.UpdateAndRender(&GameMemory, NewInput, &bitmap);
+        Game.GetSoundSamples(&GameMemory, &SoundBuffer);
 
         void *Region1 = (uint8 *)SoundOutput.Data + ByteToLock;
         uint32 Region1Size = BytesToWrite;

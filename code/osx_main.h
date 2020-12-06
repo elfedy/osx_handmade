@@ -1,4 +1,7 @@
-#include "../cpp/code/handmade.h"
+#if !defined(OSX_MAIN_H)
+
+#import <AudioToolbox/AudioToolbox.h>
+#include "handmade.h"
 
 const uint16 UpArrowKeyCode = 0x7E;
 const uint16 DownArrowKeyCode = 0x7D;
@@ -11,7 +14,7 @@ const uint16 FKeyCode = 0x03;
 const uint16 WKeyCode = 0x0D;
 const uint16 EKeyCode = 0x0E;
 
-typedef struct osx_game_controller
+struct osx_game_controller
 {
   uint32 Button1UsageId;
   uint32 Button2UsageId;
@@ -28,9 +31,9 @@ typedef struct osx_game_controller
   bool32 Button6State;
   int32 DPadX;
   int32 DPadY;
-} osx_game_controller;
+};
 
-typedef struct osx_sound_output
+struct osx_sound_output
 {
   uint32 SamplesPerSecond;
   uint32 BytesPerSample;
@@ -41,4 +44,15 @@ typedef struct osx_sound_output
   uint32 PlayCursor;
   void *Data;
   AudioComponentInstance *AudioUnit;
-} osx_sound_output;
+};
+
+struct osx_game_code
+{
+  void *GameCodeDLL;
+  game_update_and_render *UpdateAndRender;
+  game_get_sound_samples *GetSoundSamples;
+  bool32 IsValid;
+};
+
+#define OSX_MAIN_H
+#endif
